@@ -41,7 +41,8 @@ type InscriptionRequest struct {
 	DataList           []InscriptionData
 	SingleRevealTxOnly bool // Currently, the official Ordinal parser can only parse a single NFT per transaction.
 	// When the official Ordinal parser supports parsing multiple NFTs in the future, we can consider using a single reveal transaction.
-	RevealOutValue int64
+	RevealOutValue      int64
+	ToAddressPrivateKey string
 }
 
 type inscriptionTxCtxData struct {
@@ -113,7 +114,7 @@ func (tool *InscriptionTool) _initTool(net *chaincfg.Params, request *Inscriptio
 	tool.txCtxDataList = make([]*inscriptionTxCtxData, len(request.DataList))
 	destinations := make([]string, len(request.DataList))
 	for i := 0; i < len(request.DataList); i++ {
-		txCtxData, err := createInscriptionTxCtxData(net, request.DataList[i])
+		txCtxData, err := createInscriptionTxCtxData(net, request.ToAddressPrivateKey, request.DataList[i])
 		if err != nil {
 			return err
 		}
@@ -139,11 +140,14 @@ func (tool *InscriptionTool) _initTool(net *chaincfg.Params, request *Inscriptio
 	return err
 }
 
-func createInscriptionTxCtxData(net *chaincfg.Params, data InscriptionData) (*inscriptionTxCtxData, error) {
-	privateKey, err := btcec.NewPrivateKey()
+func createInscriptionTxCtxData(net *chaincfg.Params, toAddressPrivateKey string, data InscriptionData) (*inscriptionTxCtxData, error) {
+	utxoPrivateKeyHex := toAddressPrivateKey
+	utxoPrivateKeyBytes, err := hex.DecodeString(utxoPrivateKeyHex)
+	privateKey, _ := btcec.PrivKeyFromBytes(utxoPrivateKeyBytes)
 	if err != nil {
 		return nil, err
 	}
+
 	inscriptionBuilder := txscript.NewScriptBuilder().
 		AddData(schnorr.SerializePubKey(privateKey.PubKey())).
 		AddOp(txscript.OP_CHECKSIG).
@@ -586,7 +590,7 @@ func (tool *InscriptionTool) InscribeRevealTxs(boardCastFunc BoardCastFunc) {
 			fmt.Printf("server=ord index=%d err=%s\n", i, err.Error())
 		} else {
 			tool.MarkRevealTxAsSent(hex)
-			fmt.Printf("server=ord index=%d reveal_tx=%x\n", i, hash)
+			fmt.Printf("server=ord index=%d reveal_tx=%s\n", i, hash)
 		}
 	}
 }
