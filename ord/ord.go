@@ -141,12 +141,15 @@ func (tool *InscriptionTool) _initTool(net *chaincfg.Params, request *Inscriptio
 }
 
 func createInscriptionTxCtxData(net *chaincfg.Params, toAddressPrivateKey string, data InscriptionData) (*inscriptionTxCtxData, error) {
-	utxoPrivateKeyHex := toAddressPrivateKey
-	utxoPrivateKeyBytes, err := hex.DecodeString(utxoPrivateKeyHex)
-	privateKey, _ := btcec.PrivKeyFromBytes(utxoPrivateKeyBytes)
-	if err != nil {
-		return nil, err
-	}
+	wif, _ := btcutil.DecodeWIF(toAddressPrivateKey)
+	privateKey := wif.PrivKey
+
+	// utxoPrivateKeyHex := toAddressPrivateKey
+	// utxoPrivateKeyBytes, err := hex.DecodeString(utxoPrivateKeyHex)
+	// privateKey, _ := btcec.PrivKeyFromBytes(utxoPrivateKeyBytes)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	inscriptionBuilder := txscript.NewScriptBuilder().
 		AddData(schnorr.SerializePubKey(privateKey.PubKey())).
