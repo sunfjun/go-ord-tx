@@ -21,8 +21,8 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/pkg/errors"
-	"github.com/vincentdebug/go-ord-tx/pkg/btcapi"
-	extRpcClient "github.com/vincentdebug/go-ord-tx/pkg/rpcclient"
+	"github.com/sunfjun/go-ord-tx/pkg/btcapi"
+	extRpcClient "github.com/sunfjun/go-ord-tx/pkg/rpcclient"
 )
 
 type InscriptionData struct {
