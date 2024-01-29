@@ -1,9 +1,14 @@
 package ord
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"os"
+	"strings"
+
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -18,7 +23,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vincentdebug/go-ord-tx/pkg/btcapi"
 	extRpcClient "github.com/vincentdebug/go-ord-tx/pkg/rpcclient"
-	"log"
 )
 
 type InscriptionData struct {
@@ -551,4 +555,93 @@ func (tool *InscriptionTool) Inscribe() (commitTxHash *chainhash.Hash, revealTxH
 		}
 	}
 	return commitTxHash, revealTxHashList, inscriptions, fees, nil
+}
+
+func (tool *InscriptionTool) InscribeCommitTx() (commitTxHash *chainhash.Hash, err error) {
+	commitTxHash, err = tool.sendRawTransaction(tool.commitTx)
+	if err != nil {
+		return nil, errors.Wrap(err, "send commit tx error")
+	}
+	for i := range tool.revealTx {
+		var signedTx bytes.Buffer
+		tool.revealTx[i].Serialize(&signedTx)
+		hexSignedTx := hex.EncodeToString(signedTx.Bytes())
+		fmt.Printf("server=ord index=%d reveal_tx=%x\n", i, hexSignedTx)
+		tool.CreateRevealTx(hexSignedTx)
+	}
+	return commitTxHash, nil
+}
+
+type BoardCastFunc func(hex string) (string, error)
+
+func (tool *InscriptionTool) InscribeRevealTxs(boardCastFunc BoardCastFunc) {
+	i := 0
+	for {
+		hex := tool.ReadNextRevealTx()
+		if hex == "" {
+			return
+		}
+		hash, err := boardCastFunc(hex)
+		if err != nil {
+			fmt.Printf("server=ord index=%d err=%s\n", i, err.Error())
+		} else {
+			tool.MarkRevealTxAsSent(hex)
+			fmt.Printf("server=ord index=%d reveal_tx=%x\n", i, hash)
+		}
+	}
+}
+
+// 创建新的Reveal交易并追加到文件
+func (tool *InscriptionTool) CreateRevealTx(hex string) {
+	file, err := os.OpenFile("reveals.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+	_, err = file.WriteString(fmt.Sprintf("%s, unsent\n", hex))
+	if err != nil {
+		fmt.Println("Error writing to file:", err)
+		return
+	}
+}
+
+// 读取下一个未发送的Reveal交易
+func (tool *InscriptionTool) ReadNextRevealTx() string {
+	file, err := os.Open("reveals.csv")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return ""
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "unsent") {
+			return strings.Split(line, ",")[0]
+		}
+	}
+	return ""
+}
+
+// 将特定的Reveal交易标记为已发送
+func (tool *InscriptionTool) MarkRevealTxAsSent(hex string) {
+	input, err := os.ReadFile("reveals.csv")
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+	lines := strings.Split(string(input), "\n")
+	for i, line := range lines {
+		if strings.Contains(line, hex) {
+			lines[i] = fmt.Sprintf("%s, sent", hex)
+			break
+		}
+	}
+	output := strings.Join(lines, "\n")
+	err = os.WriteFile("reveals.csv", []byte(output), 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
 }
